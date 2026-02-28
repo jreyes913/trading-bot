@@ -1,42 +1,41 @@
-# requirements.txt — Production dependencies (pinned)
+# requirements.txt — Production dependencies
 
 # ── Broker & Market Data ──────────────────────────────
-alpaca-py==0.33.1
-yfinance==0.2.40
-pandas-datareader==0.10.0
-edgartools==2.14.2
-fundamentalanalysis==0.4.1
+alpaca-py
+yfinance
+pandas-datareader
+edgartools
+fundamentalanalysis
 
 # ── Data & Scientific Foundation ──────────────────────
-numpy==1.26.4
-pandas==2.2.2
-scipy==1.13.1
-statsmodels==0.14.2
-pyarrow==16.1.0
-requests==2.32.3
-httpx==0.27.0
+numpy
+pandas
+scipy
+statsmodels
+pyarrow
+requests
+httpx
+python-dotenv
+PyYAML
 
 # ── Technical Analysis ────────────────────────────────
-TA-Lib==0.4.29
-pandas-ta==0.3.14b
-finta==1.3.1
+# Note: TA-Lib requires the C library to be installed on the system
+TA-Lib
+pandas-ta
+finta
 
 # ── Quantitative & Portfolio Analysis ─────────────────
-vectorbt==0.26.1
-Riskfolio-Lib==6.0.0
-PyPortfolioOpt==1.5.5
-QuantStats==0.0.62
-hmmlearn==0.3.2
-scikit-learn==1.5.0
+vectorbt
+Riskfolio-Lib
+PyPortfolioOpt
+QuantStats
+hmmlearn
+scikit-learn
 
 # ── Machine Learning & NLP ────────────────────────────
-transformers==4.41.2
-torch==2.3.1
-
-# ── Validation & Configuration ────────────────────────
-pydantic==2.7.4
-python-dotenv==1.0.1
-PyYAML==6.0.1
+transformers
+torch
 
 # ── Alerts & Notifications ────────────────────────────
-twilio==9.2.3
+# We are using SMTP-to-SMS workaround, but keeping this for future
+twilio

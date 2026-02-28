@@ -2,7 +2,6 @@ import os
 import logging
 import numpy as np
 import pandas as pd
-import talib
 from collections import defaultdict, deque
 from multiprocessing import Queue
 from transformers import pipeline
@@ -115,14 +114,17 @@ class IndicatorProcessor:
                     continue
 
                 # Technical Calculations
-                closes = np.array(self.buffers[symbol])
-                rsi = talib.RSI(closes, timeperiod=14)[-1]
-                macd, _, _ = talib.MACD(closes, fastperiod=12, slowperiod=26, signalperiod=9)
+                closes = pd.Series(list(self.buffers[symbol]), name='close')
+                from finta import TA
+                df_closes = closes.to_frame()
+                rsi_val = TA.RSI(df_closes).iloc[-1]
+                macd_df = TA.MACD(df_closes)
+                macd_val = macd_df['MACD'].iloc[-1]
                 
                 # Scoring (Strict: Only allow Buy if Regime is Bull)
                 score = 0
                 if self.current_regime == "Bull":
-                    if macd[-1] > 0 and rsi < 70: score += 2
+                    if macd_val > 0 and rsi_val < 70: score += 2
                 elif self.current_regime == "Bear":
                     score -= 2 # Overall Bearish pressure
                 

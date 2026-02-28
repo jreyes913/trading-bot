@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 # Import our modules
 from src.ingestion import ResilientStreamManager
 from src.indicators import IndicatorProcessor
-from src.execution import OrderExecutor
+from src.execution import ExecutionEngine
 
 # Load environment variables
 load_dotenv()
