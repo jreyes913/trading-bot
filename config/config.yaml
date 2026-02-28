@@ -1,5 +1,5 @@
 connectivity:
-  heartbeat_threshold_ms: 500
+  heartbeat_threshold_ms: 60000     # Increased to 60s to account for low IEX volume
   ws_base_backoff_s: 1
   ws_max_backoff_s: 300
 regime:
@@ -9,7 +9,7 @@ regime:
 risk:
   adv_position_limit: 0.01
   circuit_breaker_drawdown: 0.03
-  circuit_breaker_poll_s: 10
+  circuit_breaker_poll_s: 30        # Polling every 30s is plenty for a 3% drawdown check
   max_spread_pct: 0.0005
 sentiment:
   min_history_readings: 60
