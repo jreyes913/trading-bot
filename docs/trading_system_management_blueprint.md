@@ -1,45 +1,44 @@
-# 📋 The Bot Rules (Management Blueprint)
+# Trading System Management Blueprint
 
-This doc is for the boring (but super important) management stuff. Where do things go? How do we fix them if they break?
+This blueprint outlines the operational management of the automated trading system, focusing on organization, secret management, and standard operating procedures (SOPs).
 
-## 📁 Where is Everything?
+## 1. Directory Structure & Responsibilities
 
-| Folder | What goes there? | Why? |
+The system is organized to ensure a strict separation of concerns.
+
+| Location | Component | Role |
 | :--- | :--- | :--- |
-| `src/` | The actual code (the brains). | Keep all the logic in one place. |
-| `config/` | Settings like how much risk we can take. | Don't hard-code thresholds, it makes testing easier. |
-| `data/` | Where the bot saves its "homework" (like company info). | We don't want to re-download everything from EDGAR every day. |
-| `logs/` | Where the bot records everything it does. | If something breaks, we check here. |
-| `.env` | **SUPER SECRET KEYS.** | Never show anyone. This is your Alpaca password. |
+| `src/` | Core Engine | Contains all strategy, ingestion, and execution logic. |
+| `config/` | Operational Settings | Stores thresholds, risk limits, and logging levels. |
+| `data/` | Artifact Cache | Persists local data (EDGAR, HMM models, audit logs). |
+| `logs/` | System Logging | Stores structured (JSONL) and plain-text system events. |
+| `tests/` | QA Suite | Contains unit and integration tests (pytest). |
 
-## 🤫 Secrets & Settings
+## 2. Secrets & Configuration Management
 
-| Where | What's in it? | Important Rule |
+| Asset | Location | Security Protocol |
 | :--- | :--- | :--- |
-| **.env** | Alpaca Keys, Twilio Keys, SMTP. | **DO NOT COMMIT THIS TO GITHUB.** |
-| **.env.example** | A template for your keys. | Commit this, but leave it empty. |
-| **config/config.yaml** | Risk levels, bet sizes, thresholds. | Feel free to change this as you learn. |
+| **Credentials** | `.env` | Stored locally; ignored by Git; never committed. |
+| **API Keys Template** | `.env.example` | Distributed in the repository as a setup template. |
+| **Risk Parameters** | `config/config.yaml` | Committed to Git; used to tune intraday system behavior. |
 
-## 🛠️ What to Do if Things Break (SOPs)
+## 3. Standard Operating Procedures (SOPs)
 
-| Situation | Action |
+Standard responses to system-triggered events.
+
+| Event | Protocol |
 | :--- | :--- |
-| **Internet Lag > 0.5s** | Bot goes into "Safety Mode." It will kill all trades. Just wait for the internet to come back, the bot will auto-reconnect. |
-| **Loss > 3% in a Day** | Bot shuts down. It will send you a text. **Do NOT restart it** until the next day. Take the L, learn, and try again tomorrow. |
-| **Data Rejected** | Check `data/rejected_tickers/`. If the bot is ignoring a ticker you like, it's because the data was trash or weird. |
+| **Connectivity Failure** | `ingestion.py` enters "Safety Mode," closes all positions, and waits for a stable heartbeat signal before resuming. |
+| **Drawdown Halt** | System enters a locked state; cancels all pending orders. Manual review is required before the next session. |
+| **Data Rejection** | Ticker is logged in `data/rejected_tickers/`. Audit required to determine if it's a structural or transient data issue. |
 
-## 📝 Keeping Tabs (Logging)
+## 4. Operation Targets (Makefile)
 
-| Log Type | What is it for? |
+Common commands for system management.
+
+| Command | Action |
 | :--- | :--- |
-| **trading.jsonl** | Everything the bot does. |
-| **critical.jsonl** | Only the super serious stuff (like a crash or a trade-kill). |
-
-## 🏗️ Makefile Commands
-
-| Command | What it does |
-| :--- | :--- |
-| `make run` | Starts the bot. |
-| `make test` | Runs the automated tests. |
-| `make lint` | Checks your code for messy stuff. |
-| `make halt` | Forces an emergency shutdown. |
+| `make run` | Starts the multi-process trading engine. |
+| `make test` | Executes the full pytest suite with coverage. |
+| `make lint` | Runs Black and Mypy for code quality and typing. |
+| `make halt` | Triggers a manual emergency position flatten. |

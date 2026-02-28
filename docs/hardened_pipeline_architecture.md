@@ -1,35 +1,35 @@
-# 🛡️ How We Keep the Bot from Dying (Architecture)
+# System Architecture & Technical Resiliency
 
-Look, trading is risky. This doc explains how we make sure the bot doesn't do anything stupid and lose our money.
+This document outlines the mechanisms used to ensure the trading bot operates reliably in live market conditions.
 
-## 🧱 The Three Main Parts
+## 1. Connectivity & Reliability
 
-| Part | What it's called | Why we care |
+The system is designed to handle network failures autonomously without risking accidental trade execution.
+
+| Mechanism | Implementation | Impact |
 | :--- | :--- | :--- |
-| **Connectivity** | Reconnect Loop | If the internet goes down, it keeps trying to get back online. It starts slow and gets faster, so we don't spam Alpaca. |
-| **Vibe Check** | Heartbeat Monitor | If we don't hear from the market for 0.5 seconds, we assume the connection is dead and **kill all trades** immediately. Clutch. |
-| **Validation** | Pydantic Gatekeeper | Before we trust any financial data (like from EDGAR), we check it. If the revenue is a negative number (which is impossible), we ignore it. |
+| **Reconnect Logic** | Exponential backoff (1s - 300s) | Prevents connection "thundering herds" during broker outages. |
+| **Watchdog Timer** | 500ms Heartbeat Monitor | Triggers "Safety Mode" if data stream lags, automatically flattening positions. |
+| **Data Validation** | Pydantic Schemas | Rejects malformed financial data (e.g., negative revenue) at ingestion time. |
 
-## 🧮 Smart Money Math
+## 2. Risk Management & Position Sizing
 
-| Concept | The Fancy Name | What it actually does |
+Mathematical safety is prioritized over geometric growth to protect against severe drawdowns.
+
+| Component | Logic | Purpose |
 | :--- | :--- | :--- |
-| **Don't Overbet** | Fractional Kelly | We calculate the perfect bet size, then only use 25% of that. It keeps us from going broke after one bad trade. |
-| **Volatility Scaling** | VIX Adjustment | If the market is getting super crazy (high VIX), we automatically make our trades smaller. |
-| **Regime Detector** | HMM | A "brain" that checks if the market is Bull, Bear, or Neutral. We only buy when it's Bull. |
-| **Fast Exit** | SPY Trend Slope | If the SPY (the whole market) starts crashing, we get out of our trades instantly, even if our other signals say everything's fine. |
+| **Position Sizing** | 0.25x Fractional Kelly | Mitigates the impact of inaccurate "edge" estimates. |
+| **Volatility Scaling** | VIX-based Reduction | Decreases risk during periods of high market uncertainty. |
+| **Regime Filter** | HMM Detector | Ensures the bot only initiates longs during established bull regimes. |
+| **Fast-Exit Overlay** | 5-min SPY Trend Slope | Acts as a high-frequency sensor to exit trades before daily trends confirm a reversal. |
 
-## 🚀 Running Faster
+## 3. Performance & Safety Breaks
 
-| Issue | Fix | Why? |
+The system handles high data volume through process isolation and automated circuit breakers.
+
+| Guardrail | Trigger | Action |
 | :--- | :--- | :--- |
-| **Python is Slow** | Multi-Processing | We use 3 separate CPU processes. One for listening to data, one for doing math, and one for making trades. No lagging allowed. |
-| **Lookahead Bias** | Purged Cross-Val | When we test the bot, we make sure it's not "cheating" by seeing future data during training. No Cap. |
-
-## 🛑 Safety Breaks
-
-| What | Trigger | What happens? |
-| :--- | :--- | :--- |
-| **Circuit Breaker** | -3% Intraday Loss | Bot cancels all orders and closes all positions. Stops trading for the day. |
-| **Virtual Stop** | Price breach | A super fast monitor that sells as soon as a stop price is hit, even if the market is gapping. |
-| **Bad Spread** | Bid-Ask > 0.05% | If the spread (the cost of trading) is too high, the bot just waits for it to get better. |
+| **Process Isolation** | Multi-processing (3 nodes) | Eliminates Python GIL contention, decoupling ingestion from computation. |
+| **Circuit Breaker** | -3.0% Intraday Equity Drop | Automatically closes all positions and cancels pending orders. |
+| **Spread Filter** | Spread > 0.05% of Price | Defers order entry until liquidity improves. |
+| **Virtual Stop Monitor** | Real-time Trade Breach | Submits IOC (Immediate or Cancel) market orders to ensure fills during gaps. |

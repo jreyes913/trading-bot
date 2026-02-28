@@ -1,55 +1,56 @@
-# 📈 My Alpaca Trading Bot (No Cap Edition)
+# Alpaca Markets Automated Trading Bot
 
-This is a super solid bot for trading on Alpaca. I built it to be "anti-fragile," which basically means it won't just crash and burn when the market gets weird. It’s got a 20-step plan to make sure we're making smart moves and not losing the bag.
+This is a resilient, automated trading system designed for the Alpaca Markets platform. It implements a 20-step quantitative execution pipeline focused on system reliability, mathematical safety, and comprehensive risk management.
 
-## 🚀 Cool Stuff This Bot Does
+## Core System Features
 
-| Feature | What's the point? |
+| Feature | Description |
 | :--- | :--- |
-| **Internet Safety Net** | If the internet glitches for even half a second, it kills all trades so we don't get stuck in a bad spot. |
-| **Triple Brain Power** | It uses 3 separate processes so it can read data, crunch numbers, and trade at the same time without lagging. |
-| **Emergency Brake** | If the portfolio drops 3% in one day, it shuts down everything. FR, safety first. |
-| **Don't Bet the Farm** | It uses "Kelly" math to make sure we only bet a small slice of our money at a time. |
-| **Vibe Check** | It literally reads the news and uses AI to see if the "vibes" are off for a stock before buying. |
+| **Resilient Connectivity** | Implements exponential backoff and a 500ms heartbeat watchdog to handle network instability. |
+| **Multi-Process Design** | Separates ingestion, signal calculation, and order execution into three distinct OS processes to ensure high performance. |
+| **Portfolio Guardrails** | Features a 3% intraday drawdown circuit breaker that automatically flattens positions and halts trading. |
+| **Position Sizing** | Uses Fractional Kelly math adjusted for VIX and ATR volatility to prevent over-leveraging. |
+| **Sentiment Analysis** | Utilizes FinBERT (NLP) to analyze market news and prevent entries when sentiment drops below statistical norms. |
 
-## 🧠 How the Bot Thinks
+## System Architecture Overview
 
-| Step | Brain Part | What it's doing |
-| :--- | :--- | :--- |
-| **1** | **The Listener** | Just hangs out on the internet waiting for stock prices to move. |
-| **2** | **The Math Nerd** | Calculates things like RSI and MACD (basically checking if a stock is "cheap" or "expensive"). |
-| **3** | **The Executor** | Pulls the trigger and buys/sells if the math looks good and the spread isn't trash. |
+| Component | Responsibility |
+| :--- | :--- |
+| **Data Ingestion** | Maintains the live WebSocket connection and feeds raw market data into the system. |
+| **Signal Calculation** | Processes technical indicators (RSI, MACD) and runs sentiment analysis models. |
+| **Order Execution** | Manages order routing, spread gatekeeping, and virtual stop-loss monitoring. |
 
-## 🛠️ Getting Started
+## Getting Started
 
 ### Prerequisites
 - Python 3.11+
-- An Alpaca account (Paper trading is fine, don't lose real money yet).
+- Alpaca Markets API Keys (Paper or Live)
+- A local environment with the required financial libraries installed.
 
-### Setting Up the Vibes
-I'm using a specific folder for all my finance projects. Make sure you use it too:
+### Environment Setup
+This project operates within a dedicated finance virtual environment:
 ```bash
 source /home/jose/venvs/finance/bin/activate
 ```
 
 ### Installation
-1. Grab the code:
+1. **Clone the repository:**
    ```bash
    git clone https://github.com/jreyes913/trading-bot.git
    cd trading-bot
    ```
-2. Install the heavy hitters (TA-Lib, VectorBT, etc.):
+2. **Install dependencies:**
    ```bash
    pip install -r requirements.txt
    ```
-3. Hide your keys:
+3. **Configure secrets:**
    ```bash
    cp .env.example .env
-   # Open .env and paste your Alpaca keys in there.
+   # Populate .env with your Alpaca and alert credentials.
    ```
 
-## ⚙️ Changing Settings
-If you want to change how much the bot bets or when the emergency brake kicks in, check out `config/config.yaml`. It's all in there.
+## Configuration
+All operational limits, such as risk thresholds and bet sizes, are externalized in `config/config.yaml` for easy adjustment without modifying code.
 
-## 📜 Legal Stuff
-Check the [LICENSE](LICENSE) file, but basically, don't sue me if the bot takes an L.
+## License
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
