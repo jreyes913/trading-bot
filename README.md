@@ -7,8 +7,8 @@ An anti-fragile, high-frequency-ready automated trading system built for Alpaca 
 - **Resilient Connectivity:** WebSocket management with exponential backoff and a 500ms heartbeat watchdog.
 - **Multi-Process Architecture:** Decoupled ingestion, calculation, and execution processes to eliminate GIL contention.
 - **Advanced Risk Management:** Portfolio-level circuit breakers, virtual stop-loss monitoring, and spread/liquidity gatekeeping.
-- **Quantitative Robustness:** Fractional Kelly sizing with VIX/ATR volatility adjustment and purged/embargoed cross-validation.
-- **Sentiment Analysis:** Integrated FinBERT sentiment scoring with statistical process control (Z-score triggers).
+- **Quantitative & Technical Robustness:** TA-Lib for high-performance indicators, Riskfolio-Lib for advanced optimization, and VectorBT for vectorized backtesting.
+- **Fundamental & Sentiment Analysis:** Integrated Edgartools for EDGAR data, FinBERT for sentiment scoring, and Z-score based statistical alerts.
 
 ## Architecture
 
@@ -24,6 +24,13 @@ The system is split into three core processes communicating via `multiprocessing
 - Python 3.11+
 - Alpaca Markets API Keys (Paper or Live)
 
+### Environment Setup
+
+The project is designed to operate from the shared finance virtual environment:
+```bash
+source /home/jose/venvs/finance/bin/activate
+```
+
 ### Installation
 
 1. Clone the repository:
@@ -32,18 +39,12 @@ The system is split into three core processes communicating via `multiprocessing
    cd trading-bot
    ```
 
-2. Set up a virtual environment:
-   ```bash
-   python -m venv .venv
-   source .venv/bin/activate  # Linux/macOS
-   ```
-
-3. Install dependencies:
+2. Install/Update project dependencies in the finance venv:
    ```bash
    pip install -r requirements.txt
    ```
 
-4. Configure environment variables:
+3. Configure environment variables:
    ```bash
    cp .env.example .env
    # Edit .env with your API keys
