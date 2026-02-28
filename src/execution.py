@@ -111,7 +111,17 @@ class ExecutionEngine:
         return vix, atr_pct, adv_20
 
     async def run(self):
-        logger.info("Execution Engine started with DCF & Kelly sizing.")
+        logger.info("Execution Engine started with Cached DCF & Kelly sizing.")
+        
+        # Load Fundamental Cache
+        import json
+        cache_path = "data/fundamental_cache.json"
+        fund_cache = {}
+        if os.path.exists(cache_path):
+            with open(cache_path, "r") as f:
+                fund_cache = json.load(f)
+            logger.info(f"Loaded fundamentals for {len(fund_cache)} tickers from cache.")
+
         while True:
             try:
                 loop = asyncio.get_event_loop()
@@ -126,17 +136,25 @@ class ExecutionEngine:
                     symbol = sig["symbol"]
                     price = sig["price"]
                     
-                    # 1. Fundamental Check (Simulation: we assume we have raw data)
-                    # In production, we'd fetch this from FMP/EDGAR here.
-                    raw_fundamentals = [{"ticker": symbol, "revenue": 1e9, "ebit": 1e8, "market_cap": 5e8, "total_debt": 1e8, "cash": 2e8, "shares_outstanding": 1e7}]
-                    validated = self.gatekeeper.process(raw_fundamentals)
+                    # 1. Fundamental Check from Cache
+                    if symbol not in fund_cache:
+                        logger.warning(f"event=TRADE_REJECTED symbol={symbol} reason='No cached fundamental data'")
+                        continue
+                        
+                    raw_data = fund_cache[symbol]
+                    validated = self.gatekeeper.process([raw_data])
                     if not validated:
                         continue
                         
-                    # 2. Monte Carlo DCF
-                    est_value = self.dcf.estimate_value(ebitda=1.2e8, growth_mean=0.05, growth_std=0.02)
+                    # 2. Monte Carlo DCF using cached EBITDA and growth
+                    est_value = self.dcf.estimate_value(
+                        ebitda=raw_data["ebitda"], 
+                        growth_mean=raw_data["growth_mean"], 
+                        growth_std=raw_data["growth_std"]
+                    )
+                    
                     if not self.dcf.is_undervalued(price, est_value):
-                        logger.info(f"event=TRADE_REJECTED symbol={symbol} reason='Not undervalued by DCF'")
+                        logger.info(f"event=TRADE_REJECTED symbol={symbol} reason='Not undervalued by DCF' price={price} est={est_value:.2f}")
                         continue
                         
                     # 3. Size the Position
