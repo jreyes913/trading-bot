@@ -18,6 +18,12 @@ config-check: ## Validate config.yaml schema before deployment
 backtest:     ## Run walk-forward backtest with purged CV (last 2 years)
 	python -m src.models.backtest --years 2
 
+refresh-universe: ## Run preselection to find top 40 moat stocks
+	export PYTHONPATH=$$PYTHONPATH:. && /home/jose/venvs/finance/bin/python scripts/refresh_universe.py
+
+cache-fund:      ## Cache daily financial data for the 40 stocks
+	export PYTHONPATH=$$PYTHONPATH:. && /home/jose/venvs/finance/bin/python scripts/cache_fundamentals.py
+
 lint:         ## Black + mypy type check
 	black src/ tests/ && mypy src/
 
