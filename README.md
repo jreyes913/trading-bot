@@ -46,8 +46,14 @@ source /home/jose/venvs/finance/bin/activate
 3. **Configure secrets:**
    ```bash
    cp .env.example .env
-   # Populate .env with your Alpaca and alert credentials.
+   # Populate .env with your Alpaca, FMP, and SMTP credentials.
    ```
+
+### Free SMS Alerts via SMTP
+You can receive SMS alerts for free by sending an email to your carrier's SMS gateway:
+- **Verizon:** `[number]@vtext.com`
+- **AT&T:** `[number]@txt.att.net`
+- **T-Mobile:** `[number]@tmomail.net`
 
 ## Configuration
 All operational limits, such as risk thresholds and bet sizes, are externalized in `config/config.yaml` for easy adjustment without modifying code.

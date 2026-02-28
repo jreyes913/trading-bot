@@ -32,7 +32,15 @@ Standard responses to system-triggered events.
 | **Drawdown Halt** | System enters a locked state; cancels all pending orders. Manual review is required before the next session. |
 | **Data Rejection** | Ticker is logged in `data/rejected_tickers/`. Audit required to determine if it's a structural or transient data issue. |
 
-## 4. Operation Targets (Makefile)
+## 4. Free SMS Alerts via SMTP Gateway
+
+Instead of expensive third-party services, this system uses your email to send text alerts directly to your phone. To configure this, set `SMTP_TO_SMS` in your `.env` to your carrier's specific email gateway:
+
+- **Verizon:** `[number]@vtext.com`
+- **AT&T:** `[number]@txt.att.net`
+- **T-Mobile:** `[number]@tmomail.net`
+
+## 5. Operation Targets (Makefile)
 
 Common commands for system management.
 
