@@ -1,5 +1,10 @@
 # Alpaca Markets Automated Trading Bot
 
+## About This Project
+This system represents the implementation of extensive research into retail market analysis across three core disciplines: **Fundamental**, **Quantitative**, and **Technical** analysis. 
+
+While the architectural design and strategic parameters are rooted in my engineering background and market studies, the majority of the codebase was implemented by **Gemini CLI**. As an engineer by trade rather than a professional programmer, I leveraged AI to bridge the gap between quantitative theory and production-grade execution logic.
+
 This is a resilient, automated trading system designed for the Alpaca Markets platform. It implements a 20-step quantitative execution pipeline focused on system reliability, mathematical safety, and comprehensive risk management.
 
 ## Core System Features
