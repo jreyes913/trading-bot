@@ -1,0 +1,11 @@
+# requirements-dev.txt — Dev/test tooling (not deployed to production)
+-r requirements.txt
+
+pytest==8.2.2
+pytest-asyncio==0.23.7
+pytest-cov==5.0.0
+black==24.4.2
+mypy==1.10.0
+pre-commit==3.7.1
+pip-tools==7.4.1
+ipykernel==6.29.4            # Jupyter for quant research notebooks

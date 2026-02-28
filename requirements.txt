@@ -1,0 +1,44 @@
+# requirements.txt — Production dependencies (pinned)
+# Regenerate with: pip-compile requirements.in --output-file requirements.txt
+
+# ── Broker & Market Data ──────────────────────────────
+alpaca-py==0.33.1
+
+# ── Data Handling ─────────────────────────────────────
+pandas==2.2.2
+numpy==1.26.4
+pyarrow==16.1.0              # Parquet I/O for EDGAR cache
+
+# ── Validation ────────────────────────────────────────
+pydantic==2.7.4
+
+# ── Technical Indicators ──────────────────────────────
+pandas-ta==0.3.14b
+scipy==1.13.1
+
+# ── Portfolio Optimisation ────────────────────────────
+PyPortfolioOpt==1.5.5
+scikit-learn==1.5.0
+
+# ── Regime & Statistical Models ───────────────────────
+hmmlearn==0.3.2
+
+# ── NLP / Sentiment ───────────────────────────────────
+transformers==4.41.2
+torch==2.3.1                 # CPU-only build recommended for cost
+
+# ── Alerts & Notifications ────────────────────────────
+twilio==9.2.3
+
+# ── Configuration & Environment ───────────────────────
+python-dotenv==1.0.1
+PyYAML==6.0.1
+
+# ── Data Sources ──────────────────────────────────────
+pandas-datareader==0.10.0    # FRED yield curve / VIX
+yfinance==0.2.40             # Sector ETF momentum
+sec-edgar-downloader==5.0.2  # 10-K / 10-Q filing retrieval
+
+# ── Web Scraping ──────────────────────────────────────
+requests==2.32.3
+lxml==5.2.2

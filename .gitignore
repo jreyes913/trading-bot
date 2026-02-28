@@ -1,0 +1,12 @@
+.env
+data/
+__pycache__/
+*.pkl
+*.parquet
+logs/
+.venv/
+.pytest_cache/
+*.pyc
+*.pyo
+*.pyd
+.ipynb_checkpoints/
