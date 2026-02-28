@@ -6,11 +6,14 @@ regime:
   fast_exit_lookback_bars: 12
   fast_exit_slope_threshold: -0.002
   hmm_states: 3
+  er_period: 10                     # Period for Efficiency Ratio calculation
 risk:
   adv_position_limit: 0.01
   circuit_breaker_drawdown: 0.03
   circuit_breaker_poll_s: 30        # Polling every 30s is plenty for a 3% drawdown check
   max_spread_pct: 0.0005
+  max_positions_per_symbol: 1       # Limit concurrent positions in the same ticker
+  buy_cooldown_s: 3600              # Minimum seconds between buys for the same symbol
 sentiment:
   min_history_readings: 60
   zscore_exit_threshold: -2.0
@@ -20,6 +23,10 @@ sizing:
   kelly_fraction: 0.25
   vix_baseline: 20.0
   vix_max: 40.0
+  min_kelly_samples: 10             # Min trades before using rolling Kelly stats
+  max_kelly_cap: 0.20               # Absolute max % of equity per trade
+  default_win_rate: 0.50            # Fallback win rate
+  default_win_loss: 1.2             # Fallback win/loss ratio
 trading_universe:
 - ACN
 - ADBE

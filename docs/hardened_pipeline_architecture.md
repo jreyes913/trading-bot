@@ -18,9 +18,9 @@ Mathematical safety is prioritized over geometric growth to protect against seve
 
 | Component | Logic | Purpose |
 | :--- | :--- | :--- |
-| **Position Sizing** | 0.25x Fractional Kelly | Mitigates the impact of inaccurate "edge" estimates. |
+| **Position Sizing** | Rolling Fractional Kelly | Estimates edge from realized trades; applies strict equity caps. |
 | **Volatility Scaling** | VIX-based Reduction | Decreases risk during periods of high market uncertainty. |
-| **Regime Filter** | HMM Detector | Ensures the bot only initiates longs during established bull regimes. |
+| **Regime Filter** | KAMA-MSR Detector | Uses an adaptive filter to distinguish between trending and sideways regimes. |
 | **Fast-Exit Overlay** | 5-min SPY Trend Slope | Acts as a high-frequency sensor to exit trades before daily trends confirm a reversal. |
 
 ## 3. Performance & Safety Breaks
@@ -30,6 +30,8 @@ The system handles high data volume through process isolation and automated circ
 | Guardrail | Trigger | Action |
 | :--- | :--- | :--- |
 | **Process Isolation** | Multi-processing (3 nodes) | Eliminates Python GIL contention, decoupling ingestion from computation. |
-| **Circuit Breaker** | -3.0% Intraday Equity Drop | Automatically closes all positions and cancels pending orders. |
+| **Circuit Breaker** | -3.0% Intraday Equity Drop | Automatically closes all positions and cancels pending orders from session start. |
 | **Spread Filter** | Spread > 0.05% of Price | Defers order entry until liquidity improves. |
-| **Virtual Stop Monitor** | Real-time Trade Breach | Submits IOC (Immediate or Cancel) market orders to ensure fills during gaps. |
+| **Position Limits** | Max 1 pos / symbol | Prevents repeated duplicate buys in the same asset. |
+| **Buy Cooldown** | 1-hour per symbol | Prevents high-frequency over-trading in a single symbol. |
+| **Cache Freshness** | Stale > 24 hours | Validates fundamental data integrity and staleness at startup. |

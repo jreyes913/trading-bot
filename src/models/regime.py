@@ -15,18 +15,29 @@ class KAMARegimeDetector:
         self.slow_sc = 2 / (slow_period + 1)
         self.neutral_threshold = 0.3  # Efficiency Ratio below this is "Neutral"
 
+    def _calculate_er(self, prices: np.ndarray, index: int) -> float:
+        """Shared helper for Efficiency Ratio calculation."""
+        if index < self.er_period:
+            return 0.0
+        
+        window = prices[index - self.er_period : index + 1]
+        change = abs(window[-1] - window[0])
+        volatility = np.sum(np.abs(np.diff(window)))
+        
+        return change / volatility if volatility != 0 else 0.0
+
     def calculate_kama(self, prices: np.ndarray) -> np.ndarray:
         """Calculates the Kaufman Adaptive Moving Average."""
         n = len(prices)
         kama = np.zeros(n)
+        if n < self.er_period:
+            return kama
+            
         kama[self.er_period-1] = prices[self.er_period-1]
 
         for i in range(self.er_period, n):
-            # 1. Efficiency Ratio (ER) = |Total Change| / Sum of Absolute Changes
-            change = abs(prices[i] - prices[i - self.er_period])
-            volatility = np.sum(np.abs(np.diff(prices[i - self.er_period : i + 1])))
-            
-            er = change / volatility if volatility != 0 else 0
+            # 1. Efficiency Ratio (ER)
+            er = self._calculate_er(prices, i)
             
             # 2. Smoothing Constant (SC)
             sc = (er * (self.fast_sc - self.slow_sc) + self.slow_sc) ** 2
@@ -43,15 +54,13 @@ class KAMARegimeDetector:
         if len(prices) < self.er_period + 5:
             return "Neutral"
 
-        # Calculate KAMA and ER for the latest window
+        # Calculate KAMA for the whole window to ensure continuity
         kama = self.calculate_kama(prices)
         
-        # Latest Efficiency Ratio
-        change = abs(prices[-1] - prices[-self.er_period])
-        volatility = np.sum(np.abs(np.diff(prices[-self.er_period:])))
-        er = change / volatility if volatility != 0 else 0
+        # Latest Efficiency Ratio using shared helper
+        er = self._calculate_er(prices, len(prices) - 1)
         
-        # Slope of KAMA
+        # Slope of KAMA (using latest 3 points for smoothing)
         slope = (kama[-1] - kama[-3]) / kama[-3] if kama[-3] != 0 else 0
         
         # Logic: High ER means market is efficient (trending). Low ER means noise (MSR logic).

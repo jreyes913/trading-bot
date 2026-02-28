@@ -29,7 +29,7 @@ class DCFValuator:
         return current_price < (estimated_value * self.undervalue_threshold)
 
 class PositionSizer:
-    """Calculates position size using Fractional Kelly and Volatility Scaling."""
+    """Calculates position size using Rolling Kelly and Volatility Scaling."""
     def __init__(self, config: dict):
         self.kelly_fraction = config["sizing"]["kelly_fraction"]
         self.vix_baseline = config["sizing"]["vix_baseline"]
@@ -37,22 +37,48 @@ class PositionSizer:
         self.atr_baseline = config["sizing"]["atr_baseline_pct"]
         self.atr_max = config["sizing"]["atr_max_pct"]
         self.adv_limit = config["risk"]["adv_position_limit"]
+        
+        # New Hardening Parameters
+        self.min_samples = config["sizing"].get("min_kelly_samples", 10)
+        self.max_cap = config["sizing"].get("max_kelly_cap", 0.20)
+        self.default_win_rate = config["sizing"].get("default_win_rate", 0.50)
+        self.default_win_loss = config["sizing"].get("default_win_loss", 1.2)
 
-    def calculate_kelly(self, win_rate: float, win_loss_ratio: float) -> float:
-        """Standard Kelly Criterion: f* = (bp - q) / b"""
-        b = win_loss_ratio
-        p = win_rate
+    def calculate_kelly(self, realized_trades: list = None) -> float:
+        """
+        Calculates Kelly Criterion based on realized performance.
+        f* = (bp - q) / b
+        """
+        if not realized_trades or len(realized_trades) < self.min_samples:
+            p = self.default_win_rate
+            b = self.default_win_loss
+        else:
+            # Calculate from realized outcomes
+            # realized_trades is a list of returns (e.g. 0.05, -0.02)
+            wins = [r for r in realized_trades if r > 0]
+            losses = [r for r in realized_trades if r <= 0]
+            
+            p = len(wins) / len(realized_trades)
+            avg_win = np.mean(wins) if wins else 0
+            avg_loss = abs(np.mean(losses)) if losses else 1e-6
+            b = avg_win / avg_loss if avg_loss > 0 else self.default_win_loss
+
         q = 1 - p
         kelly_f = (b * p - q) / b if b > 0 else 0
-        return max(0, kelly_f * self.kelly_fraction)
+        
+        # Apply fractional multiplier and strict cap
+        final_f = min(kelly_f * self.kelly_fraction, self.max_cap)
+        return max(0.0, final_f)
 
     def apply_vol_scaling(self, base_f: float, current_vix: float, current_atr_pct: float) -> float:
         """Reduces position size as volatility (VIX/ATR) rises."""
         # VIX Scale: 1.0 at baseline, 0.0 at max
-        vix_scale = max(0.0, 1.0 - (current_vix - self.vix_baseline) / (self.vix_max - self.vix_baseline))
+        vix_denom = self.vix_max - self.vix_baseline
+        vix_scale = max(0.0, 1.0 - (current_vix - self.vix_baseline) / vix_denom) if vix_denom > 0 else 1.0
         
         # ATR Scale: 1.0 at baseline, 0.0 at max
-        atr_scale = max(0.0, 1.0 - (current_atr_pct - self.atr_baseline) / (self.atr_max - self.atr_baseline))
+        atr_denom = self.atr_max - self.atr_baseline
+        atr_scale = max(0.0, 1.0 - (current_atr_pct - self.atr_baseline) / atr_denom) if atr_denom > 0 else 1.0
         
         combined_scale = min(vix_scale, atr_scale)
         return base_f * combined_scale
@@ -62,7 +88,7 @@ class PositionSizer:
         dollar_amount = equity * f
         shares = int(dollar_amount / price)
         
-        # ADV Cap: Don't be more than 1% of daily volume
+        # ADV Cap: Don't be more than 1% of daily volume (or as configured)
         max_shares = int(adv_20 * self.adv_limit)
         
         return min(shares, max_shares)
