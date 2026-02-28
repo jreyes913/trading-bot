@@ -1,59 +1,55 @@
-# Alpaca Markets Automated Trading Pipeline
+# 📈 My Alpaca Trading Bot (No Cap Edition)
 
-An anti-fragile, high-frequency-ready automated trading system built for Alpaca Markets. This pipeline implements a 20-step quantitative execution strategy with a heavy focus on resiliency, mathematical robustness, and risk management.
+This is a super solid bot for trading on Alpaca. I built it to be "anti-fragile," which basically means it won't just crash and burn when the market gets weird. It’s got a 20-step plan to make sure we're making smart moves and not losing the bag.
 
-## Key Features
+## 🚀 Cool Stuff This Bot Does
 
-- **Resilient Connectivity:** WebSocket management with exponential backoff and a 500ms heartbeat watchdog.
-- **Multi-Process Architecture:** Decoupled ingestion, calculation, and execution processes to eliminate GIL contention.
-- **Advanced Risk Management:** Portfolio-level circuit breakers, virtual stop-loss monitoring, and spread/liquidity gatekeeping.
-- **Quantitative & Technical Robustness:** TA-Lib for high-performance indicators, Riskfolio-Lib for advanced optimization, and VectorBT for vectorized backtesting.
-- **Fundamental & Sentiment Analysis:** Integrated Edgartools for EDGAR data, FinBERT for sentiment scoring, and Z-score based statistical alerts.
+| Feature | What's the point? |
+| :--- | :--- |
+| **Internet Safety Net** | If the internet glitches for even half a second, it kills all trades so we don't get stuck in a bad spot. |
+| **Triple Brain Power** | It uses 3 separate processes so it can read data, crunch numbers, and trade at the same time without lagging. |
+| **Emergency Brake** | If the portfolio drops 3% in one day, it shuts down everything. FR, safety first. |
+| **Don't Bet the Farm** | It uses "Kelly" math to make sure we only bet a small slice of our money at a time. |
+| **Vibe Check** | It literally reads the news and uses AI to see if the "vibes" are off for a stock before buying. |
 
-## Architecture
+## 🧠 How the Bot Thinks
 
-The system is split into three core processes communicating via `multiprocessing.Queue`:
-1.  **Ingestion:** I/O-bound asyncio loop for live market data.
-2.  **Indicators:** CPU-bound process for signal scoring and NLP sentiment.
-3.  **Execution:** I/O-bound process for order routing and risk monitoring.
+| Step | Brain Part | What it's doing |
+| :--- | :--- | :--- |
+| **1** | **The Listener** | Just hangs out on the internet waiting for stock prices to move. |
+| **2** | **The Math Nerd** | Calculates things like RSI and MACD (basically checking if a stock is "cheap" or "expensive"). |
+| **3** | **The Executor** | Pulls the trigger and buys/sells if the math looks good and the spread isn't trash. |
 
-## Getting Started
+## 🛠️ Getting Started
 
 ### Prerequisites
-
 - Python 3.11+
-- Alpaca Markets API Keys (Paper or Live)
+- An Alpaca account (Paper trading is fine, don't lose real money yet).
 
-### Environment Setup
-
-The project is designed to operate from the shared finance virtual environment:
+### Setting Up the Vibes
+I'm using a specific folder for all my finance projects. Make sure you use it too:
 ```bash
 source /home/jose/venvs/finance/bin/activate
 ```
 
 ### Installation
-
-1. Clone the repository:
+1. Grab the code:
    ```bash
    git clone https://github.com/jreyes913/trading-bot.git
    cd trading-bot
    ```
-
-2. Install/Update project dependencies in the finance venv:
+2. Install the heavy hitters (TA-Lib, VectorBT, etc.):
    ```bash
    pip install -r requirements.txt
    ```
-
-3. Configure environment variables:
+3. Hide your keys:
    ```bash
    cp .env.example .env
-   # Edit .env with your API keys
+   # Open .env and paste your Alpaca keys in there.
    ```
 
-## Configuration
+## ⚙️ Changing Settings
+If you want to change how much the bot bets or when the emergency brake kicks in, check out `config/config.yaml`. It's all in there.
 
-Operational thresholds (VIX baselines, Kelly fractions, circuit breaker limits) are managed in `config/config.yaml`.
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+## 📜 Legal Stuff
+Check the [LICENSE](LICENSE) file, but basically, don't sue me if the bot takes an L.
