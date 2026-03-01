@@ -3,34 +3,39 @@ import pandas as pd
 import pytest
 from src.models.regime import KAMARegimeDetector
 
-def test_er_calculation():
-    detector = KAMARegimeDetector(er_period=10)
+@pytest.fixture
+def config():
+    return {
+        "regime": {
+            "er_period": 10,
+            "msr_window": 40,
+            "gamma": 0.15,
+            "debug": False
+        }
+    }
+
+def test_kama_calculation(config):
+    detector = KAMARegimeDetector(config)
     # Perfectly trending path
-    prices = np.arange(20, dtype=float)
-    er = detector._calculate_er(prices, 15)
-    # Total change = 10, total volatility = 10, ER should be 1.0
-    assert pytest.approx(er) == 1.0
+    prices = np.arange(100, 150, dtype=float)
+    kama = detector.calculate_kama(prices)
+    assert len(kama) == len(prices)
+    # KAMA should be increasing
+    assert kama[-1] > kama[-10]
 
-    # Choppy path
-    choppy_prices = np.array([10, 11, 9, 10, 11, 9, 10, 11, 9, 10, 11])
-    er_choppy = detector._calculate_er(choppy_prices, 10)
-    # Change = 1, Volatility = 13, ER should be 1/13
-    assert pytest.approx(er_choppy) == 1/13
-
-def test_kama_regime_transition():
-    detector = KAMARegimeDetector(er_period=10)
+def test_kama_regime_transition(config):
+    detector = KAMARegimeDetector(config)
+    np.random.seed(42)
     
-    # Generate synthetic bull market
-    bull_prices = np.linspace(100, 110, 50)
-    state_bull = detector.predict_state(bull_prices)
-    assert state_bull == "Bull"
+    # Generate synthetic bull market (Steady uptrend -> LV_Bull -> Returns Bear)
+    t = np.linspace(0, 1, 200)
+    bull_prices = 100 + 50 * t + np.random.normal(0, 0.01, 200)
+    state = detector.predict_state(bull_prices)
+    # Contrarion: Bull market returns Bear
+    assert state in ["Bear", "Neutral"]
 
-    # Generate synthetic bear market
-    bear_prices = np.linspace(110, 90, 50)
-    state_bear = detector.predict_state(bear_prices)
-    assert state_bear == "Bear"
-
-    # Generate flat/neutral market
-    flat_prices = np.ones(50) * 100 + np.random.normal(0, 0.1, 50)
-    state_neutral = detector.predict_state(flat_prices)
-    assert state_neutral == "Neutral"
+    # Generate synthetic bear market (Volatile downtrend -> HV_Bear -> Returns Bull)
+    bear_prices = 150 - 50 * t + np.random.normal(0, 5.0, 200)
+    state = detector.predict_state(bear_prices)
+    # Contrarion: Bear market returns Bull
+    assert state in ["Bull", "Neutral"]

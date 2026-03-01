@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from dotenv import load_dotenv
 
 from src.models.selector import InstitutionalSelector
+from src.utils.symbols import sanitize_symbols
 
 # Setup logging
 def setup_logging():
@@ -47,7 +48,7 @@ def run_refresh():
     
     # If trading_universe is already filtered, we might need the full list.
     # For now, we assume trading_universe contains the candidates.
-    full_list = config.get("trading_universe", [])
+    full_list = sanitize_symbols(config.get("trading_universe", []))
     
     selector = InstitutionalSelector(config=config, target_count=40)
     

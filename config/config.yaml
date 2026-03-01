@@ -33,7 +33,6 @@ sizing:
   vix_baseline: 20.0
   vix_max: 40.0
 trading_universe:
-- ALL
 - CF
 - CHD
 - HIG

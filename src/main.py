@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 from src.ingestion import ResilientStreamManager
 from src.indicators import IndicatorProcessor
 from src.execution import ExecutionEngine
+from src.alerts import AlertManager
 
 # Load environment variables
 load_dotenv()
@@ -60,13 +61,20 @@ def run_execution(signal_queue: Queue, config: dict):
 
 def main():
     logger.info("=== Alpaca Trading Bot Initializing ===")
+    alerts = AlertManager()
     
     # 1. Load Config
-    with open("config/config.yaml", "r") as f:
-        config = yaml.safe_load(f)
+    try:
+        with open("config/config.yaml", "r") as f:
+            config = yaml.safe_load(f)
+    except Exception as e:
+        logger.critical(f"Failed to load config: {e}")
+        alerts.send_alert("BOT STARTUP FAILED", f"Error loading config: {e}")
+        return
+
+    alerts.send_alert("BOT STARTED", f"Trading bot is now online with {len(config.get('trading_universe', []))} symbols.")
     
     # 2. Initialize Queues
-    # We set maxsize to prevent memory bloat if a process lags
     bar_q = Queue(maxsize=2000)
     sig_q = Queue(maxsize=500)
     
@@ -79,29 +87,32 @@ def main():
     
     # 4. Launch Processes
     for p in processes:
-        p.daemon = True # Ensure they die if main dies
+        p.daemon = True
         p.start()
         logger.info(f"Launched {p.name} process [PID: {p.pid}]")
 
-    # 5. Monitor Processes
+    stop_reason = "Unknown"
     try:
         while True:
             time.sleep(10)
             for p in processes:
                 if not p.is_alive():
+                    stop_reason = f"Process {p.name} CRASHED"
                     logger.critical(f"PROCESS CRASHED: {p.name}. Restarting system...")
-                    # In a full production build, we might attempt to restart just the one process
-                    # but for safety, we exit and let the supervisor (systemd) restart the whole bot.
                     return
     except KeyboardInterrupt:
+        stop_reason = "Manual shutdown (Ctrl+C)"
         logger.info("Shutdown signal received. Stopping bot...")
+    except Exception as e:
+        stop_reason = f"Fatal error: {e}"
+        logger.error(f"Unexpected error in main: {e}")
     finally:
+        alerts.send_alert("BOT STOPPED", f"Trading bot has gone offline. Reason: {stop_reason}")
         for p in processes:
             p.terminate()
             p.join()
         logger.info("All processes stopped. Cleanup complete.")
 
 if __name__ == "__main__":
-    # Ensure multiprocessing works correctly on all platforms
     mp.set_start_method("spawn", force=True)
     main()

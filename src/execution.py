@@ -1,10 +1,8 @@
 import os
 import asyncio
 import logging
-import smtplib
 import json
 import time
-from email.mime.text import MIMEText
 from multiprocessing import Queue
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
@@ -20,6 +18,7 @@ from alpaca.data.timeframe import TimeFrame
 
 from src.models.gatekeeper import FundamentalGatekeeper
 from src.models.dcf import DCFValuator, PositionSizer
+from src.alerts import AlertManager
 
 # Load environment variables
 load_dotenv()
@@ -40,32 +39,6 @@ def setup_logging():
     return logging.getLogger("execution")
 
 logger = setup_logging()
-
-class AlertManager:
-    """Handles sending email and SMS alerts via SMTP gateway."""
-    def __init__(self):
-        self.host = os.getenv("SMTP_HOST")
-        self.port = 465
-        self.user = os.getenv("SMTP_USER")
-        self.password = os.getenv("SMTP_PASSWORD")
-        self.from_email = os.getenv("SMTP_FROM")
-        self.to_sms = os.getenv("SMTP_TO_SMS")
-
-    def send_alert(self, subject: str, message: str):
-        if not all([self.host, self.user, self.password, self.to_sms]):
-            logger.error("Alert config missing in .env. Skipping alert.")
-            return
-        msg = MIMEText(message)
-        msg["Subject"] = subject
-        msg["From"] = self.from_email
-        msg["To"] = self.to_sms
-        try:
-            with smtplib.SMTP_SSL(self.host, self.port) as server:
-                server.login(self.user, self.password)
-                server.send_message(msg)
-            logger.info(f"event=ALERT_SENT message='Alert sent to {self.to_sms}'")
-        except Exception as e:
-            logger.error(f"Failed to send alert: {e}")
 
 class ExecutionEngine:
     def __init__(self, signal_queue: Queue, config: dict):
@@ -90,6 +63,10 @@ class ExecutionEngine:
         self.position_cache = {} # symbol -> qty
         self.last_buy_ts = {}    # symbol -> timestamp
         self.realized_returns = [] # list of floats for Kelly
+        
+        # Observability counters
+        self.spread_pass_count = 0
+        self.spread_fail_count = 0
         
         # Constants from config
         self.max_pos_per_symbol = config["risk"].get("max_positions_per_symbol", 1)
@@ -119,7 +96,7 @@ class ExecutionEngine:
 
             drawdown = (self.opening_equity - equity) / self.opening_equity
             if drawdown >= self.drawdown_limit:
-                logger.critical(f"event=CIRCUIT_BREAKER_TRIGGERED drawdown={drawdown:.2%}")
+                logger.critical(f"event=CIRCUIT_BREAKER_TRIGGERED drawdown={drawdown:.2%} opening_equity={self.opening_equity} current_equity={equity}")
                 self.halted = True
                 self.trading.close_all_positions(cancel_orders=True)
                 self.alerts.send_alert("TRADING HALT", f"Bot halted. Drawdown: {drawdown:.2%}")
@@ -137,8 +114,12 @@ class ExecutionEngine:
             spread_pct = (ask - bid) / mid
             
             if spread_pct > self.max_spread:
-                logger.warning(f"event=ORDER_SKIPPED symbol={symbol} reason='Spread too wide' spread={spread_pct:.5%}")
+                self.spread_fail_count += 1
+                logger.warning(f"event=SPREAD_FILTER_FAIL symbol={symbol} spread={spread_pct:.5%} limit={self.max_spread:.5%} fail_count={self.spread_fail_count}")
                 return False
+            
+            self.spread_pass_count += 1
+            logger.info(f"event=SPREAD_FILTER_PASS symbol={symbol} spread={spread_pct:.5%} pass_count={self.spread_pass_count}")
             return True
         except Exception as e:
             logger.error(f"Spread check failed for {symbol}: {e}")
@@ -150,7 +131,6 @@ class ExecutionEngine:
             logger.critical("event=STARTUP_FAILED reason='Fundamental cache missing'")
             raise FileNotFoundError(f"Cache missing at {cache_path}")
             
-        # Freshness check: must be updated within last 24h
         mtime = os.path.getmtime(cache_path)
         if (time.time() - mtime) > 86400:
             logger.warning("event=STALE_CACHE_DETECTED message='Cache older than 24h'")
@@ -189,24 +169,40 @@ class ExecutionEngine:
             # Fetch closed orders from the last 7 days
             req = GetOrdersRequest(
                 status=QueryOrderStatus.CLOSED,
-                side=OrderSide.SELL,
                 until=datetime.now(),
                 after=datetime.now() - timedelta(days=7)
             )
             closed_orders = self.trading.get_orders(req)
             
-            # Simple return calculation logic: 
-            # In a full system, we'd match buy/sell pairs.
-            # For hardening pass, we'll use a simplified estimate or placeholder
-            # to demonstrate the rolling logic capability.
-            new_returns = []
-            for order in closed_orders:
-                if order.filled_avg_price and order.qty:
-                    # Logic to find corresponding buy and calc % return
-                    # For now, we simulate finding a return to feed the sizer
-                    pass 
+            # Group by symbol to pair buys/sells
+            by_symbol = {}
+            for o in closed_orders:
+                if o.filled_avg_price and o.filled_qty:
+                    sym = o.symbol
+                    if sym not in by_symbol: by_symbol[sym] = []
+                    by_symbol[sym].append(o)
             
-            # self.realized_returns = ... (populated from actual matched trades)
+            new_returns = []
+            for sym, orders in by_symbol.items():
+                # Sort by filled_at
+                orders.sort(key=lambda x: x.filled_at)
+                
+                # Simple FIFO pairing for return reconstruction
+                buys = [o for o in orders if o.side == OrderSide.BUY]
+                sells = [o for o in orders if o.side == OrderSide.SELL]
+                
+                while buys and sells:
+                    b = buys.pop(0)
+                    s = sells.pop(0)
+                    
+                    # Compute % return
+                    ret = (float(s.filled_avg_price) - float(b.filled_avg_price)) / float(b.filled_avg_price)
+                    new_returns.append(ret)
+            
+            if new_returns:
+                self.realized_returns = new_returns[-100:] # Keep last 100
+                logger.info(f"event=REALIZED_RETURNS_UPDATED count={len(self.realized_returns)} latest_mean={np.mean(self.realized_returns):.4f}")
+                
         except Exception as e:
             logger.error(f"Failed to update realized returns: {e}")
 
@@ -247,13 +243,13 @@ class ExecutionEngine:
                     
                     # Hardening: Duplicate Buy Prevention
                     if self.position_cache.get(symbol, 0) >= self.max_pos_per_symbol:
-                        logger.info(f"event=ORDER_SKIPPED symbol={symbol} reason='Max positions reached'")
+                        logger.info(f"event=ORDER_SKIPPED symbol={symbol} reason='Max positions reached' current_qty={self.position_cache.get(symbol)}")
                         continue
                         
                     # Hardening: Cooldown Enforcement
                     if symbol in self.last_buy_ts:
                         if (time.time() - self.last_buy_ts[symbol]) < self.buy_cooldown:
-                            logger.info(f"event=ORDER_SKIPPED symbol={symbol} reason='Buy cooldown active'")
+                            logger.info(f"event=ORDER_SKIPPED symbol={symbol} reason='Buy cooldown active' remaining={int(self.buy_cooldown - (time.time() - self.last_buy_ts[symbol]))}s")
                             continue
 
                     # Hardening: Spread Filter
@@ -262,7 +258,7 @@ class ExecutionEngine:
 
                     # Fundamental Check from Validated Cache
                     if symbol not in fund_cache:
-                        logger.warning(f"event=ORDER_SKIPPED symbol={symbol} reason='No fundamental data'")
+                        logger.warning(f"event=ORDER_SKIPPED symbol={symbol} reason='No fundamental data in cache'")
                         continue
                         
                     raw_data = fund_cache[symbol]
@@ -277,7 +273,7 @@ class ExecutionEngine:
                     )
                     
                     if not self.dcf.is_undervalued(price, est_value):
-                        logger.info(f"event=ORDER_SKIPPED symbol={symbol} reason='Not undervalued by DCF'")
+                        logger.info(f"event=ORDER_SKIPPED symbol={symbol} reason='Not undervalued by DCF' price={price} est={est_value:.2f}")
                         continue
                         
                     # Size the Position using Rolling Kelly
@@ -294,7 +290,7 @@ class ExecutionEngine:
                                 symbol=symbol, qty=qty, side=OrderSide.BUY, time_in_force=TimeInForce.DAY
                             ))
                             self.last_buy_ts[symbol] = time.time()
-                            logger.info(f"event=ORDER_PLACED symbol={symbol} qty={qty} price={price}")
+                            logger.info(f"event=ORDER_PLACED symbol={symbol} qty={qty} price={price} kelly_f={f:.4f} scaled_f={scaled_f:.4f}")
                             self.alerts.send_alert("TRADE PLACED", f"Bought {qty} shares of {symbol} at ${price:.2f}")
                         except Exception as e:
                             logger.error(f"Order submission failed: {e}")

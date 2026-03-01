@@ -4,6 +4,7 @@ import yaml
 import logging
 import yfinance as yf
 from dotenv import load_dotenv
+from src.utils.symbols import sanitize_symbols
 
 # Setup logging
 def setup_logging():
@@ -28,7 +29,7 @@ def cache_fundamentals():
     
     with open(CONFIG_FILE, "r") as f:
         config = yaml.safe_load(f)
-    tickers = config.get("trading_universe", [])
+    tickers = sanitize_symbols(config.get("trading_universe", []))
     
     if not tickers:
         logger.error("No tickers found in config.")
