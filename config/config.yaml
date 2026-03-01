@@ -6,9 +6,11 @@ regime:
   fast_exit_lookback_bars: 12
   fast_exit_slope_threshold: -0.002
   hmm_states: 3
-  er_period: 10                     # KAMA Efficiency Ratio period
-  msr_window: 100                   # Increased window for better MSR convergence
-  msr_regimes: 3                    # 3 regimes (Bull/Bear/Neutral) for better noise handling
+  er_period: 10                     # KAMA Efficiency Ratio period (n)
+  msr_window: 100                   # Data window for Markov-Switching fit
+  msr_regimes: 2                    # 2 regimes (Low/High Variance) as per sample.py
+  gamma: 0.15                       # KAMA filter multiplier (Equation 17)
+  tc: 0.0040                        # Transaction costs for equities (halved 0.80%)
   debug: false
 risk:
   adv_position_limit: 0.01
