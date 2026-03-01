@@ -1,66 +1,66 @@
 connectivity:
-  heartbeat_threshold_ms: 60000     # Increased to 60s to account for low IEX volume
+  heartbeat_threshold_ms: 60000
   ws_base_backoff_s: 1
   ws_max_backoff_s: 300
 regime:
+  debug: false
+  er_period: 10
   fast_exit_lookback_bars: 12
   fast_exit_slope_threshold: -0.002
+  gamma: 0.15
   hmm_states: 3
-  er_period: 10                     # KAMA Efficiency Ratio period (n)
-  msr_window: 100                   # Data window for Markov-Switching fit
-  msr_regimes: 2                    # 2 regimes (Low/High Variance) as per sample.py
-  gamma: 0.15                       # KAMA filter multiplier (Equation 17)
-  tc: 0.0040                        # Transaction costs for equities (halved 0.80%)
-  debug: false
+  msr_regimes: 2
+  msr_window: 100
+  tc: 0.004
 risk:
   adv_position_limit: 0.01
+  buy_cooldown_s: 3600
   circuit_breaker_drawdown: 0.03
-  circuit_breaker_poll_s: 30        # Polling every 30s is plenty for a 3% drawdown check
+  circuit_breaker_poll_s: 30
+  max_positions_per_symbol: 1
   max_spread_pct: 0.0005
-  max_positions_per_symbol: 1       # Limit concurrent positions in the same ticker
-  buy_cooldown_s: 3600              # Minimum seconds between buys for the same symbol
 sentiment:
   min_history_readings: 60
   zscore_exit_threshold: -2.0
 sizing:
   atr_baseline_pct: 0.015
   atr_max_pct: 0.04
+  default_win_loss: 1.2
+  default_win_rate: 0.5
   kelly_fraction: 0.25
+  max_kelly_cap: 0.2
+  min_kelly_samples: 10
   vix_baseline: 20.0
   vix_max: 40.0
-  min_kelly_samples: 10             # Min trades before using rolling Kelly stats
-  max_kelly_cap: 0.20               # Absolute max % of equity per trade
-  default_win_rate: 0.50            # Fallback win rate
-  default_win_loss: 1.2             # Fallback win/loss ratio
 trading_universe:
-- ACN
-- ADBE
-- ABNB
 - ALL
-- AMP
-- AIZ
-- CBOE
 - CF
 - CHD
-- CINF
-- CTSH
-- DECK
-- DVN
-- EXPD
-- FFIV
-- FSLR
-- GL
 - HIG
-- LULU
-- NEM
-- NVR
-- PTC
-- PHM
-- NOW
-- TROW
-- TTD
 - TRV
+- NVR
+- CBOE
+- CINF
+- GL
+- NEM
+- AIZ
+- EXPD
+- ACN
+- PHM
+- CTSH
+- ADBE
+- PTC
+- FSLR
+- DVN
+- FFIV
+- AMP
 - UBER
+- LULU
+- TROW
+- ABNB
+- NOW
+- DECK
+- TTD
 validation:
   cv_embargo_pct: 0.01
   cv_gap_size: 10

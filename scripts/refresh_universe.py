@@ -49,22 +49,22 @@ def run_refresh():
     # For now, we assume trading_universe contains the candidates.
     full_list = config.get("trading_universe", [])
     
-    selector = InstitutionalSelector(target_count=40)
+    selector = InstitutionalSelector(config=config, target_count=40)
     
     # 2. Step 1: Fundamental Moat Filter
     logger.info("Step 1: Filtering for 'Moat' characteristics...")
     moat_df = selector.get_moat_candidates(full_list)
     
     if moat_df.empty:
-        logger.error("No moat candidates found. Check API key or criteria.")
+        logger.error("No moat candidates found. Check criteria.")
         return
 
-    # 3. Step 2: Quantitative Sharpe/Beta selection
-    logger.info("Step 2: Calculating Sharpe and Beta (Target: 0.3)...")
-    quant_df = selector.calculate_quant_metrics(moat_df)
+    # 3. Step 2: Calculate MRD, Beta, Sharpe
+    logger.info("Step 2: Calculating Triple-Metrics (MRD, Beta, Sharpe)...")
+    metrics_df = selector.calculate_triple_metrics(moat_df)
     
     # 4. Step 3: Final 40 selection
-    new_40 = selector.select_best_40(quant_df)
+    new_40 = selector.select_best_40(metrics_df)
     
     # 5. Update Config
     config["trading_universe"] = new_40
