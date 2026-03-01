@@ -65,10 +65,18 @@ class KAMARegimeDetector:
                 kama_series = pd.Series(kama)
                 kama_returns = np.log(kama_series / kama_series.shift(1)).dropna().values[-self.msr_window:]
                 
+                # Defensive check for data quality
+                if len(kama_returns) < self.msr_window or not np.all(np.isfinite(kama_returns)):
+                    raise ValueError(f"kama_returns invalid or insufficient (len={len(kama_returns)})")
+
                 model = MarkovRegression(kama_returns, k_regimes=self.msr_regimes, switching_variance=False)
                 res = model.fit(disp=False)
                 
-                means = res.params[:self.msr_regimes]
+                # Extract means via parameter names to ensure reliability
+                means = [res.params[name] for name in res.param_names if 'const' in name]
+                if len(means) != self.msr_regimes:
+                    raise ValueError(f"Extracted {len(means)} means, expected {self.msr_regimes}")
+
                 bull_idx = np.argmax(means)
                 bear_idx = np.argmin(means)
                 
@@ -82,10 +90,13 @@ class KAMARegimeDetector:
                 if bear_prob > 0.6 and means[bear_idx] < 0 and kama_slope < -0.0001:
                     return "Bear"
                 
-            except Exception:
-                pass 
+            except Exception as e:
+                logger.error(
+                    f"event=MSR_FIT_FAILURE error='{e}' "
+                    f"msr_window={self.msr_window} msr_regimes={self.msr_regimes} latest_er={latest_er:.4f}"
+                )
 
-        # 3. Aggressive Fallback (if trending strongly but MSR failed)
+        # 3. Aggressive Fallback (if trending strongly but MSR failed or inconclusive)
         if kama_slope > 0.001: return "Bull"
         if kama_slope < -0.001: return "Bear"
         

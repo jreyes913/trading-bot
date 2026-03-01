@@ -39,3 +39,22 @@ def test_flat_line_neutral(config):
     prices = np.ones(150) * 100.0
     state = detector.predict_state(prices)
     assert state == "Neutral"
+
+def test_msr_failure_fallback(config, caplog):
+    import logging
+    from unittest.mock import patch
+    detector = KAMARegimeDetector(config)
+    
+    # Perfectly trending prices to pass ER filter and normally trigger Bull
+    trending_prices = np.linspace(100, 110, 150)
+    
+    with patch('src.models.regime.MarkovRegression') as mock_msr:
+        mock_msr.side_effect = Exception("Simulated MSR Failure")
+        
+        with caplog.at_level(logging.ERROR):
+            state = detector.predict_state(trending_prices)
+            
+        assert "event=MSR_FIT_FAILURE" in caplog.text
+        assert "Simulated MSR Failure" in caplog.text
+        # Fallback should identify Bull due to positive KAMA slope
+        assert state == "Bull"
