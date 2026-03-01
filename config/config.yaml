@@ -18,7 +18,7 @@ risk:
   circuit_breaker_drawdown: 0.03
   circuit_breaker_poll_s: 30
   max_positions_per_symbol: 1
-  max_spread_pct: 0.0005
+  max_spread_pct: 0.0015
 sentiment:
   min_history_readings: 60
   zscore_exit_threshold: -2.0

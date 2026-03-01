@@ -164,9 +164,11 @@ class ExecutionEngine:
         return vix, atr_pct, adv_20
 
     async def _update_realized_returns(self):
-        """Polls closed orders to calculate realized returns for Kelly sizing."""
+        """
+        Polls closed orders and reconstructs realized returns using FIFO quantity pairing.
+        Handles partial fills and mismatched buy/sell lots.
+        """
         try:
-            # Fetch closed orders from the last 7 days
             req = GetOrdersRequest(
                 status=QueryOrderStatus.CLOSED,
                 until=datetime.now(),
@@ -174,37 +176,51 @@ class ExecutionEngine:
             )
             closed_orders = self.trading.get_orders(req)
             
-            # Group by symbol to pair buys/sells
-            by_symbol = {}
-            for o in closed_orders:
-                if o.filled_avg_price and o.filled_qty:
-                    sym = o.symbol
-                    if sym not in by_symbol: by_symbol[sym] = []
-                    by_symbol[sym].append(o)
+            # Sort by execution time
+            closed_orders.sort(key=lambda x: x.filled_at if x.filled_at else x.created_at)
             
+            # Inventory of open lots: {symbol: [{"qty": float, "price": float}]}
+            inventory = {}
             new_returns = []
-            for sym, orders in by_symbol.items():
-                # Sort by filled_at
-                orders.sort(key=lambda x: x.filled_at)
-                
-                # Simple FIFO pairing for return reconstruction
-                buys = [o for o in orders if o.side == OrderSide.BUY]
-                sells = [o for o in orders if o.side == OrderSide.SELL]
-                
-                while buys and sells:
-                    b = buys.pop(0)
-                    s = sells.pop(0)
+            
+            for o in closed_orders:
+                if not o.filled_qty or not o.filled_avg_price:
+                    continue
                     
-                    # Compute % return
-                    ret = (float(s.filled_avg_price) - float(b.filled_avg_price)) / float(b.filled_avg_price)
-                    new_returns.append(ret)
+                sym = o.symbol
+                qty = float(o.filled_qty)
+                price = float(o.filled_avg_price)
+                
+                if o.side == OrderSide.BUY:
+                    if sym not in inventory: inventory[sym] = []
+                    inventory[sym].append({"qty": qty, "price": price})
+                
+                elif o.side == OrderSide.SELL:
+                    if sym not in inventory or not inventory[sym]:
+                        continue # Selling something we didn't track the buy for
+                        
+                    sell_qty = qty
+                    while sell_qty > 0 and inventory[sym]:
+                        buy_lot = inventory[sym][0]
+                        match_qty = min(buy_lot["qty"], sell_qty)
+                        
+                        # Calculate return for this matched slice
+                        trade_return = (price - buy_lot["price"]) / buy_lot["price"]
+                        new_returns.append(trade_return)
+                        
+                        # Update remaining quantities
+                        buy_lot["qty"] -= match_qty
+                        sell_qty -= match_qty
+                        
+                        if buy_lot["qty"] <= 0:
+                            inventory[sym].pop(0)
             
             if new_returns:
-                self.realized_returns = new_returns[-100:] # Keep last 100
-                logger.info(f"event=REALIZED_RETURNS_UPDATED count={len(self.realized_returns)} latest_mean={np.mean(self.realized_returns):.4f}")
+                self.realized_returns = new_returns[-100:] # Maintain rolling window of 100
+                logger.info(f"event=REALIZED_RETURNS_SYNC count={len(self.realized_returns)} mean_return={np.mean(self.realized_returns):.4%}")
                 
         except Exception as e:
-            logger.error(f"Failed to update realized returns: {e}")
+            logger.error(f"Failed to synchronize realized returns: {e}")
 
     async def monitor_risk(self):
         """Background task for risk guardrails."""
