@@ -20,22 +20,19 @@ Mathematical safety is prioritized over geometric growth to protect against seve
 | :--- | :--- | :--- |
 | **Position Sizing** | Rolling Fractional Kelly | Estimates edge from realized trades; applies strict equity caps. |
 | **Volatility Scaling** | VIX-based Reduction | Decreases risk during periods of high market uncertainty. |
-| Regime Filter | KAMA-MSR Detector | Uses an adaptive filter to distinguish between trending and sideways regimes. |
+| Regime Filter | KAMA-MSR Detector | Adaptive filter + Markov-Switching Regression to identify latent states. |
 
 ### KAMA-MSR Methodology (Pomorski)
 
-The system identifies market regimes using the Kaufman Adaptive Moving Average (KAMA) and the Mean Square Ratio (MSR):
+The system identifies market regimes using a two-stage econometric model:
 
-1.  **Efficiency Ratio (ER)**: Measures the "trendiness" of the market.
-    $$ER = \frac{|\text{Total Change over } n \text{ bars}|}{\sum |\text{Individual bar changes}|}$$
-2.  **Adaptive Smoothing (SC)**: KAMA automatically speeds up during trends and slows down in noise.
-3.  **Mean Square Ratio (MSR)**: Compares the variance of the KAMA signal to the raw price noise.
-    $$MSR = \frac{\text{MeanSquare}(\Delta KAMA)}{\text{MeanSquare}(\Delta Price)}$$
-
-**Regime Classification**:
-*   **Bull**: $MSR > \text{Threshold}$ AND $KAMA_t > KAMA_{t-1}$
-*   **Bear**: $MSR > \text{Threshold}$ AND $KAMA_t < KAMA_{t-1}$
-*   **Neutral**: $MSR \le \text{Threshold}$ (Market is dominated by noise)
+1.  **Adaptive Filtering (KAMA)**: The Kaufman Adaptive Moving Average filters price noise by adjusting its smoothing constant based on the Efficiency Ratio (ER). This ensures the model reacts to trends while ignoring sideways volatility.
+2.  **State Identification (MSR)**: A **Markov-Switching Regression** is fitted to the log-returns of the KAMA-filtered series.
+    *   The model assumes the existence of latent regimes (Bull/Bear) where the mean and variance of returns differ.
+    *   **Classification**: The system calculates the "Smoothed Marginal Probability" of being in the Bull regime.
+    *   **Bull**: $P(\text{Bull}) > 0.7$
+    *   **Bear**: $P(\text{Bull}) < 0.3$
+    *   **Neutral**: $0.3 \le P(\text{Bull}) \le 0.7$ (Ambiguous state)
 
 | **Fast-Exit Overlay** | 5-min SPY Trend Slope | Acts as a high-frequency sensor to exit trades before daily trends confirm a reversal. |
 
