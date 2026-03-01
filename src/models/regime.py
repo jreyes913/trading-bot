@@ -7,16 +7,36 @@ logger = logging.getLogger("regime")
 class KAMARegimeDetector:
     """
     Implements KAMA-MSR regime detection based on Piotr Pomorski's research.
-    Uses an adaptive filter to distinguish between trending and sideways regimes.
+    
+    The model uses the Kaufman Adaptive Moving Average (KAMA) as a filter and 
+    classifies regimes using the Mean Square Ratio (MSR).
+    
+    Math Summary:
+    1. Efficiency Ratio (ER) = |Total Price Change| / Sum of Absolute Price Changes
+    2. Smoothing Constant (SC) = [ER * (fastestSC - slowestSC) + slowestSC]^2
+    3. KAMA_t = KAMA_{t-1} + SC * (Price_t - KAMA_{t-1})
+    4. MSR = MeanSquare(diff(KAMA)) / MeanSquare(diff(Price)) over a window
+    
+    Regime Rules:
+    - Bull: MSR > Threshold AND KAMA_t > KAMA_{t-1}
+    - Bear: MSR > Threshold AND KAMA_t < KAMA_{t-1}
+    - Neutral: MSR <= Threshold
     """
-    def __init__(self, er_period: int = 10, fast_period: int = 2, slow_period: int = 30):
-        self.er_period = er_period
+    def __init__(self, config: dict):
+        regime_cfg = config.get("regime", {})
+        self.er_period = regime_cfg.get("er_period", 10)
+        self.msr_period = regime_cfg.get("msr_period", 20)
+        self.msr_threshold = regime_cfg.get("msr_threshold", 0.15)
+        self.debug = regime_cfg.get("debug", False)
+        
+        # KAMA constants
+        fast_period = 2
+        slow_period = 30
         self.fast_sc = 2 / (fast_period + 1)
         self.slow_sc = 2 / (slow_period + 1)
-        self.neutral_threshold = 0.3  # Efficiency Ratio below this is "Neutral"
 
     def _calculate_er(self, prices: np.ndarray, index: int) -> float:
-        """Shared helper for Efficiency Ratio calculation."""
+        """Calculates Efficiency Ratio for KAMA smoothing."""
         if index < self.er_period:
             return 0.0
         
@@ -27,52 +47,58 @@ class KAMARegimeDetector:
         return change / volatility if volatility != 0 else 0.0
 
     def calculate_kama(self, prices: np.ndarray) -> np.ndarray:
-        """Calculates the Kaufman Adaptive Moving Average."""
+        """Calculates the KAMA series for a given price array."""
         n = len(prices)
         kama = np.zeros(n)
         if n < self.er_period:
+            kama[:] = prices[0] if n > 0 else 0
             return kama
             
         kama[self.er_period-1] = prices[self.er_period-1]
 
         for i in range(self.er_period, n):
-            # 1. Efficiency Ratio (ER)
             er = self._calculate_er(prices, i)
-            
-            # 2. Smoothing Constant (SC)
             sc = (er * (self.fast_sc - self.slow_sc) + self.slow_sc) ** 2
-            
-            # 3. KAMA
             kama[i] = kama[i-1] + sc * (prices[i] - kama[i-1])
             
+        # Backfill initial values
+        kama[:self.er_period-1] = kama[self.er_period-1]
         return kama
 
+    def _calculate_msr(self, prices: np.ndarray, kama: np.ndarray) -> float:
+        """
+        Calculates the Mean Square Ratio (MSR) per Pomorski.
+        MSR = MS(diff(KAMA)) / MS(diff(Price))
+        """
+        if len(prices) < self.msr_period + 1:
+            return 0.0
+            
+        p_diff = np.diff(prices[-self.msr_period-1:])
+        k_diff = np.diff(kama[-self.msr_period-1:])
+        
+        ms_price = np.mean(p_diff ** 2)
+        ms_kama = np.mean(k_diff ** 2)
+        
+        return ms_kama / ms_price if ms_price != 0 else 0.0
+
     def predict_state(self, prices: np.ndarray) -> str:
-        """
-        Classifies the market regime using KAMA slope and Efficiency Ratio (MSR proxy).
-        """
-        if len(prices) < self.er_period + 5:
+        """Predicts market regime (Bull/Bear/Neutral)."""
+        if len(prices) < max(self.er_period, self.msr_period) + 5:
             return "Neutral"
 
-        # Calculate KAMA for the whole window to ensure continuity
         kama = self.calculate_kama(prices)
+        msr = self._calculate_msr(prices, kama)
         
-        # Latest Efficiency Ratio using shared helper
-        er = self._calculate_er(prices, len(prices) - 1)
+        # Check slope direction
+        kama_trending_up = kama[-1] > kama[-2]
         
-        # Slope of KAMA (using latest 3 points for smoothing)
-        slope = (kama[-1] - kama[-3]) / kama[-3] if kama[-3] != 0 else 0
-        
-        # Logic: High ER means market is efficient (trending). Low ER means noise (MSR logic).
-        if er < self.neutral_threshold:
+        if self.debug:
+            logger.debug(f"KAMA-MSR: MSR={msr:.4f} KAMA_diff={kama[-1]-kama[-2]:.4f}")
+
+        if msr <= self.msr_threshold:
             return "Neutral"
         
-        if slope > 0.0001:  # Positive slope
-            return "Bull"
-        elif slope < -0.0001: # Negative slope
-            return "Bear"
-        
-        return "Neutral"
+        return "Bull" if kama_trending_up else "Bear"
 
 class FastExitOverlay:
     """Detects sharp intraday SPY trend reversals to trigger early exits."""
@@ -87,11 +113,7 @@ class FastExitOverlay:
         
         y = spy_closes.iloc[-self.lookback:].values
         x = np.arange(len(y))
-        
-        # Linear regression slope
         slope, _ = np.polyfit(x, y, 1)
-        
-        # Normalize by price to get rate of change %
         normalized_slope = slope / y.mean()
         return normalized_slope
 

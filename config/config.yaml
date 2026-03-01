@@ -7,6 +7,9 @@ regime:
   fast_exit_slope_threshold: -0.002
   hmm_states: 3
   er_period: 10                     # Period for Efficiency Ratio calculation
+  msr_period: 20                    # Window for Mean Square Ratio calculation
+  msr_threshold: 0.15               # MSR value below which regime is Neutral
+  debug: false                      # Set to true for per-bar logic logging
 risk:
   adv_position_limit: 0.01
   circuit_breaker_drawdown: 0.03

@@ -73,7 +73,7 @@ class IndicatorProcessor:
         
         # Advanced Models
         self.sentiment_detector = SentimentChangeDetector(config)
-        self.regime_detector = KAMARegimeDetector()
+        self.regime_detector = KAMARegimeDetector(config)
         self.fast_exit = FastExitOverlay(config)
         
         self.current_regime = "Neutral"
