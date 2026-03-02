@@ -35,6 +35,8 @@ logger = setup_logging()
 def run_ingestion(bar_queue: Queue, config: dict):
     """Process 1: Data Ingestion (I/O bound)"""
     import asyncio
+    from src.ingestion import setup_logging
+    logger = setup_logging("ingestion")
     logger.info("Starting Ingestion Process...")
     
     api_key = os.getenv("ALPACA_API_KEY")
@@ -48,6 +50,8 @@ def run_ingestion(bar_queue: Queue, config: dict):
 
 def run_indicators(bar_queue: Queue, signal_queue: Queue, config: dict):
     """Process 2: Indicator Calculation (CPU bound)"""
+    from src.indicators import setup_logging
+    logger = setup_logging("indicators")
     logger.info("Starting Indicator Process...")
     processor = IndicatorProcessor(bar_queue, signal_queue, config)
     processor.run()
@@ -55,6 +59,8 @@ def run_indicators(bar_queue: Queue, signal_queue: Queue, config: dict):
 def run_execution(signal_queue: Queue, config: dict):
     """Process 3: Order Execution (Network I/O)"""
     import asyncio
+    from src.execution import setup_logging
+    logger = setup_logging("execution")
     logger.info("Starting Execution Process...")
     executor = ExecutionEngine(signal_queue, config)
     asyncio.run(executor.run())

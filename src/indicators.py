@@ -10,21 +10,33 @@ import yaml
 from src.models.regime import KAMARegimeDetector, FastExitOverlay
 
 # Setup logging
-def setup_logging():
+def setup_logging(name="indicators"):
     log_dir = "logs"
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
-        handlers=[
-            logging.FileHandler(f"{log_dir}/indicators.log"),
-            logging.StreamHandler()
-        ]
-    )
-    return logging.getLogger("indicators")
+    
+    logger = logging.getLogger(name)
+    logger.setLevel(logging.INFO)
+    
+    if logger.hasHandlers():
+        logger.handlers.clear()
+        
+    formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(name)s: %(message)s')
+    
+    fh = logging.FileHandler(f"{log_dir}/{name}.log")
+    fh.setFormatter(formatter)
+    logger.addHandler(fh)
+    
+    sh = logging.StreamHandler()
+    sh.setFormatter(formatter)
+    logger.addHandler(sh)
+    
+    return logger
 
-logger = setup_logging()
+if __name__ == "__main__":
+    logger = setup_logging()
+else:
+    logger = logging.getLogger("indicators")
 
 class SentimentChangeDetector:
     """Tracks rolling sentiment score per ticker via FinBERT."""
@@ -69,6 +81,7 @@ class IndicatorProcessor:
         self.bar_queue = bar_queue
         self.signal_queue = signal_queue
         self.config = config
+        # Store full bar dictionaries instead of just close prices
         self.buffers = defaultdict(lambda: deque(maxlen=500))
         
         # Advanced Models
@@ -81,6 +94,8 @@ class IndicatorProcessor:
 
     def run(self):
         logger.info("Indicator processor started with KAMA-MSR Regime Detection.")
+        from finta import TA
+        
         while True:
             try:
                 item = self.bar_queue.get()
@@ -92,33 +107,38 @@ class IndicatorProcessor:
                         self.signal_queue.put({"symbol": item["symbol"], "type": "SENTIMENT_EXIT", "data": res})
                     continue
 
-                # 2. Update Buffers
+                # 2. Update Buffers with full bar data
                 symbol = item["symbol"]
-                close = item["close"]
-                self.buffers[symbol].append(close)
+                self.buffers[symbol].append(item)
+                
+                if self.config.get("regime", {}).get("debug", False):
+                    logger.debug(f"Processing bar for {symbol} (buffer size: {len(self.buffers[symbol])})")
 
                 # 3. Special Handling for SPY (Global Regime)
                 if symbol == self.spy_symbol:
                     if len(self.buffers[self.spy_symbol]) > 30:
-                        new_regime = self.regime_detector.predict_state(np.array(self.buffers[self.spy_symbol]))
+                        # Extract closes for regime detector
+                        spy_closes = np.array([b["close"] for b in self.buffers[self.spy_symbol]])
+                        new_regime = self.regime_detector.predict_state(spy_closes)
                         if new_regime != self.current_regime:
                             logger.info(f"event=REGIME_CHANGED old={self.current_regime} new={new_regime}")
                             self.current_regime = new_regime
                         
                         # Check for Fast Exit reversal
-                        if self.fast_exit.should_fast_exit(self.current_regime, pd.Series(list(self.buffers[self.spy_symbol]))):
+                        if self.fast_exit.should_fast_exit(self.current_regime, pd.Series(spy_closes)):
                             self.signal_queue.put({"type": "FAST_EXIT", "symbol": "GLOBAL"})
 
                 # 4. Standard Signal Generation
                 if len(self.buffers[symbol]) < 30:
                     continue
 
-                # Technical Calculations
-                closes = pd.Series(list(self.buffers[symbol]), name='close')
-                from finta import TA
-                df_closes = closes.to_frame()
-                rsi_val = TA.RSI(df_closes).iloc[-1]
-                macd_df = TA.MACD(df_closes)
+                # Technical Calculations using full OHLC data
+                df = pd.DataFrame(list(self.buffers[symbol]))
+                # Ensure column names are what finta expects
+                df = df[['open', 'high', 'low', 'close', 'volume']]
+                
+                rsi_val = TA.RSI(df).iloc[-1]
+                macd_df = TA.MACD(df)
                 macd_val = macd_df['MACD'].iloc[-1]
                 
                 # Scoring (Strict: Only allow Buy if Regime is Bull)
@@ -133,7 +153,7 @@ class IndicatorProcessor:
                         "type": "TRADE_SIGNAL",
                         "symbol": symbol,
                         "score": score,
-                        "price": close,
+                        "price": item["close"],
                         "regime": self.current_regime,
                         "timestamp": item["timestamp"]
                     })

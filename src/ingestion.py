@@ -14,24 +14,34 @@ from alpaca.trading.client import TradingClient
 load_dotenv()
 
 # Setup logging
-def setup_logging():
+def setup_logging(name="ingestion"):
     log_dir = "logs"
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
     
-    # In a real scenario, we would use config/logging.yaml
-    # For now, we setup a basic structured-like logger
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
-        handlers=[
-            logging.FileHandler(f"{log_dir}/ingestion.log"),
-            logging.StreamHandler()
-        ]
-    )
-    return logging.getLogger("ingestion")
+    logger = logging.getLogger(name)
+    logger.setLevel(logging.INFO)
+    
+    # Remove existing handlers to avoid duplicates
+    if logger.hasHandlers():
+        logger.handlers.clear()
+        
+    formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(name)s: %(message)s')
+    
+    fh = logging.FileHandler(f"{log_dir}/{name}.log")
+    fh.setFormatter(formatter)
+    logger.addHandler(fh)
+    
+    sh = logging.StreamHandler()
+    sh.setFormatter(formatter)
+    logger.addHandler(sh)
+    
+    return logger
 
-logger = setup_logging()
+if __name__ == "__main__":
+    logger = setup_logging()
+else:
+    logger = logging.getLogger("ingestion")
 
 class HeartbeatMonitor:
     """Tracks last message timestamp; fires alert if threshold exceeded."""
@@ -51,6 +61,7 @@ class ResilientStreamManager:
         self.secret_key = secret_key
         self.symbols = symbols
         self.bar_queue = bar_queue
+        self.config = config
         
         # Config values
         self.base_backoff = config["connectivity"]["ws_base_backoff_s"]
@@ -66,6 +77,7 @@ class ResilientStreamManager:
     async def _on_bar(self, bar):
         """Callback for every incoming bar."""
         self.hb.pulse()
+        logger.info(f"event=BAR_RECEIVED symbol={bar.symbol} price={bar.close}")
         
         # Convert bar object to dict for the queue
         bar_data = {
@@ -90,7 +102,10 @@ class ResilientStreamManager:
     async def _watchdog(self):
         """Continuously checks heartbeat; triggers safety mode on lag."""
         while True:
-            await asyncio.sleep(0.1)  # check every 100ms
+            await asyncio.sleep(10)  # check every 10s for log sanity
+            if self.config.get("regime", {}).get("debug", False):
+                logger.info("event=WATCHDOG_PULSE status='Monitoring heartbeat'")
+            
             if self.hb.is_stale() and not self._safety_mode:
                 logger.critical(f"event=WS_HEARTBEAT_BREACH message='STREAM LAG > {self.hb_threshold}ms — entering Safety Mode'")
                 self._safety_mode = True
@@ -113,6 +128,10 @@ class ResilientStreamManager:
 
     async def _run_stream(self):
         """Main stream loop with exponential backoff."""
+        # Enable verbose websocket logging
+        logging.getLogger("alpaca.data.live.websocket").setLevel(logging.DEBUG)
+        logger.info(f"event=WS_INIT symbols_count={len(self.symbols)} api_key_prefix='{self.api_key[:4] if self.api_key else 'NONE'}'")
+        
         backoff = self.base_backoff
         while True:
             try:
@@ -137,10 +156,15 @@ class ResilientStreamManager:
 
     async def run(self):
         """Starts the watchdog and the stream manager."""
-        await asyncio.gather(
-            self._watchdog(),
-            self._run_stream()
-        )
+        try:
+            await asyncio.gather(
+                self._watchdog(),
+                self._run_stream()
+            )
+        except Exception as e:
+            import traceback
+            logger.critical(f"event=INGESTION_FATAL error='{e}' traceback='{traceback.format_exc()}'")
+            raise
 
 def load_config():
     with open("config/config.yaml", "r") as f:

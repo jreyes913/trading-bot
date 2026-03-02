@@ -1,9 +1,9 @@
 connectivity:
-  heartbeat_threshold_ms: 60000
+  heartbeat_threshold_ms: 600000    # Increased to 10m for IEX sparse data
   ws_base_backoff_s: 1
   ws_max_backoff_s: 300
 regime:
-  debug: false
+  debug: true                      # Set to true for per-bar logic logging
   er_period: 10
   fast_exit_lookback_bars: 12
   fast_exit_slope_threshold: -0.002
