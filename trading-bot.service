@@ -1,0 +1,14 @@
+[Unit]
+Description=Alpaca Trading Bot
+After=network.target
+
+[Service]
+User=jose
+Group=jose
+WorkingDirectory=/home/jose/trading-bot
+ExecStart=/home/jose/venvs/finance/bin/python -m src.main
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

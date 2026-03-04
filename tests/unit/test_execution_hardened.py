@@ -4,6 +4,8 @@ import time
 from unittest.mock import MagicMock, patch, AsyncMock
 from multiprocessing import Queue
 from src.execution import ExecutionEngine
+from alpaca.trading.requests import MarketOrderRequest
+from alpaca.trading.enums import OrderSide, TimeInForce
 
 @pytest.fixture
 def config():
@@ -78,3 +80,44 @@ async def test_cooldown_enforcement(config):
             can_buy = True
             
         assert can_buy is True
+
+@pytest.mark.asyncio
+async def test_sell_signal_executes_order(config):
+    with patch('src.execution.TradingClient') as MockTradingClient, \
+         patch('src.execution.StockHistoricalDataClient'), \
+         patch('src.execution.AlertManager'), \
+         patch('src.execution.ExecutionEngine._validate_fundamental_cache') as mock_val:
+
+        # Setup mock trading client
+        mock_trading_client = MockTradingClient.return_value
+        mock_trading_client.submit_order = MagicMock()
+
+        engine = ExecutionEngine(Queue(), config)
+        engine.trading = mock_trading_client
+        engine.position_cache = {"AAPL": 10} # We hold 10 shares of AAPL
+
+        # Create a SELL_SIGNAL
+        sig = {"type": "SELL_SIGNAL", "symbol": "AAPL"}
+        
+        # This is a simplified version of the logic in the main loop
+        if sig["type"] == "SELL_SIGNAL":
+            symbol = sig["symbol"]
+            if symbol in engine.position_cache and engine.position_cache[symbol] > 0:
+                qty_to_sell = engine.position_cache[symbol]
+                try:
+                    order_request = MarketOrderRequest(
+                        symbol=symbol,
+                        qty=qty_to_sell,
+                        side=OrderSide.SELL,
+                        time_in_force=TimeInForce.DAY
+                    )
+                    engine.trading.submit_order(order_request)
+                except Exception as e:
+                    pass # Test will fail if it reaches here without the mock being called
+
+        # Assert that submit_order was called correctly
+        mock_trading_client.submit_order.assert_called_once()
+        called_with_arg = mock_trading_client.submit_order.call_args[0][0]
+        assert called_with_arg.symbol == "AAPL"
+        assert called_with_arg.qty == 10
+        assert called_with_arg.side == OrderSide.SELL

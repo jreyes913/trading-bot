@@ -24,21 +24,33 @@ from src.alerts import AlertManager
 load_dotenv()
 
 # Setup logging
-def setup_logging():
+def setup_logging(name="execution"):
     log_dir = "logs"
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
-        handlers=[
-            logging.FileHandler(f"{log_dir}/execution.log"),
-            logging.StreamHandler()
-        ]
-    )
-    return logging.getLogger("execution")
+    
+    logger = logging.getLogger(name)
+    logger.setLevel(logging.INFO)
+    
+    if logger.hasHandlers():
+        logger.handlers.clear()
+        
+    formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(name)s: %(message)s')
+    
+    fh = logging.FileHandler(f"{log_dir}/{name}.log")
+    fh.setFormatter(formatter)
+    logger.addHandler(fh)
+    
+    sh = logging.StreamHandler()
+    sh.setFormatter(formatter)
+    logger.addHandler(sh)
+    
+    return logger
 
-logger = setup_logging()
+if __name__ == "__main__":
+    logger = setup_logging()
+else:
+    logger = logging.getLogger("execution")
 
 class ExecutionEngine:
     def __init__(self, signal_queue: Queue, config: dict):
@@ -306,10 +318,27 @@ class ExecutionEngine:
                                 symbol=symbol, qty=qty, side=OrderSide.BUY, time_in_force=TimeInForce.DAY
                             ))
                             self.last_buy_ts[symbol] = time.time()
-                            logger.info(f"event=ORDER_PLACED symbol={symbol} qty={qty} price={price} kelly_f={f:.4f} scaled_f={scaled_f:.4f}")
+                            logger.info(f"event=ORDER_PLACED side=BUY symbol={symbol} qty={qty} price={price} kelly_f={f:.4f} scaled_f={scaled_f:.4f}")
                             self.alerts.send_alert("TRADE PLACED", f"Bought {qty} shares of {symbol} at ${price:.2f}")
                         except Exception as e:
                             logger.error(f"Order submission failed: {e}")
+
+                elif sig["type"] == "SELL_SIGNAL":
+                    symbol = sig["symbol"]
+                    
+                    # Ensure we have a position to sell
+                    if symbol in self.position_cache and self.position_cache[symbol] > 0:
+                        qty_to_sell = self.position_cache[symbol]
+                        try:
+                            order = self.trading.submit_order(MarketOrderRequest(
+                                symbol=symbol, qty=qty_to_sell, side=OrderSide.SELL, time_in_force=TimeInForce.DAY
+                            ))
+                            logger.info(f"event=ORDER_PLACED side=SELL symbol={symbol} qty={qty_to_sell}")
+                            self.alerts.send_alert("TRADE EXITED", f"Sold {qty_to_sell} shares of {symbol}")
+                        except Exception as e:
+                            logger.error(f"Sell order submission failed for {symbol}: {e}")
+                    else:
+                        logger.info(f"event=SELL_ORDER_SKIPPED symbol={symbol} reason='No position to sell'")
 
             except Exception as e:
                 logger.error(f"Execution Engine main loop error: {e}")

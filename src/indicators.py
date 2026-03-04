@@ -144,11 +144,25 @@ class IndicatorProcessor:
                 # Scoring (Strict: Only allow Buy if Regime is Bull)
                 score = 0
                 if self.current_regime == "Bull":
-                    if macd_val > 0 and rsi_val < 70: score += 2
+                    if macd_val > 0 and rsi_val < 70: 
+                        score += 2
+                    # Sell signal if conditions are no longer met
+                    elif macd_val <= 0 or rsi_val >= 70:
+                        self.signal_queue.put({
+                            "type": "SELL_SIGNAL",
+                            "symbol": symbol,
+                            "reason": f"MACD_RSI_EXIT: macd={macd_val:.2f}, rsi={rsi_val:.2f}"
+                        })
+
                 elif self.current_regime == "Bear":
-                    score -= 2 # Overall Bearish pressure
+                    # Exit any open position if regime turns bearish
+                    self.signal_queue.put({
+                        "type": "SELL_SIGNAL",
+                        "symbol": symbol,
+                        "reason": "BEAR_REGIME_EXIT"
+                    })
                 
-                if score != 0:
+                if score > 0:
                     self.signal_queue.put({
                         "type": "TRADE_SIGNAL",
                         "symbol": symbol,
